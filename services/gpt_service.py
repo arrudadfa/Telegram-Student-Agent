@@ -7,8 +7,11 @@ from services.products_config import get_product
 # Obtém o produto GPT Premium da configuração
 GPT_PRODUCT = get_product('gpt_premium')
 
+# Valor padrão do serviço GPT Premium (obtido do produto ou fallback para 50.0)
+GPT_Service_Price = GPT_PRODUCT.price if GPT_PRODUCT else 50.0
+
 # Valores legados para compatibilidade (usar GPT_PRODUCT quando possível)
-PAYMENT_AMOUNT = GPT_PRODUCT.price if GPT_PRODUCT else 50.0
+PAYMENT_AMOUNT = GPT_Service_Price
 GPT_LINK = GPT_PRODUCT.link if GPT_PRODUCT else ""
 
 def get_gpt_info_message() -> str:

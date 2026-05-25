@@ -37,7 +37,7 @@ if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY não encontrado! Configure no arquivo .env")
 
 # IDs dos grupos permitidos
-ALLOWED_GROUP_IDS = [6368750324, 163177765, -1001937153848, 2038662917, 1098473382,163177765]
+ALLOWED_GROUP_IDS = [6368750324, 163177765, -1001937153848, 2038662917, 1098473382]
 
 # IDs dos administradores (para comandos administrativos)
 ADMIN_IDS = [6368750324, 163177765]  # Adicione os IDs dos administradores aqui

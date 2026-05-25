@@ -5,9 +5,10 @@ import json
 from typing import Optional, Dict
 from config import logger
 from services.products_config import get_product
+from services.gpt_service import GPT_Service_Price
 
-# Valor padrão do pagamento (para compatibilidade)
-PAYMENT_AMOUNT = 50.0
+# Valor padrão do pagamento (obtido do produto via gpt_service)
+PAYMENT_AMOUNT = GPT_Service_Price
 
 class PIXGenerator:
     """
@@ -69,7 +70,7 @@ class PIXGenerator:
             if product:
                 amount = product.price
             else:
-                amount = PAYMENT_AMOUNT
+                amount = GPT_Service_Price
         
         if not mercadopago_service:
             logger.error("Mercado Pago não está configurado")

@@ -7,7 +7,6 @@ from config import (
     ADMIN_IDS, bot, openai_client, CRONOGRAMA_SYSTEM_PROMPT
 )
 from services.redacao_service import RedacaoService
-from services.cronograma_service import CronogramaService
 from services.daily_limit_service import daily_limit_service
 from services.payment_service import payment_service
 from services.gpt_service import (
@@ -131,40 +130,6 @@ async def handle_message(message: types.Message):
         contem_search_keyword = len(search_keyword_encontrado) > 0
         
         logger.info(f"DEBUG - Texto: '{texto[:100]}' | Trigger: {contem_trigger} ({trigger_encontrado}) | Redação: {contem_redacao} | Busca: {contem_search_keyword} ({search_keyword_encontrado})")
-        
-        # Se contém palavra-chave de busca, realiza busca no CSV
-        if contem_search_keyword:
-            from services.file_search_service import file_search_service
-            
-            try:
-                # Busca por todas as palavras-chave encontradas
-                resultados = file_search_service.search_files_multiple_terms(search_keyword_encontrado, limit=4)
-                
-                if resultados:
-                    mensagem_busca = "🔍 Aqui está uma sugestão para o que você está buscando:\n\n"
-                    
-                    for arquivo in resultados:
-                        file_name = arquivo.get('file_name', 'Arquivo sem nome')
-                        link = arquivo.get('link_completo', '')
-                        
-                        # Escapa caracteres especiais do HTML
-                        file_name_escaped = file_name.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                        
-                        if link:
-                            # Usa HTML para criar link clicável
-                            mensagem_busca += f"📄 <b>{file_name_escaped}</b>\n"
-                            mensagem_busca += f"🔗 <a href=\"{link}\">{link}</a>\n\n"
-                        else:
-                            mensagem_busca += f"📄 <b>{file_name_escaped}</b>\n\n"
-                    
-                    await message.reply(mensagem_busca, parse_mode='HTML')
-                    logger.info(f"Resultados de busca enviados para usuário {user_id}: {len(resultados)} arquivo(s) (termos: {search_keyword_encontrado})")
-                    return
-                else:
-                    logger.info(f"Nenhum arquivo encontrado para termos '{search_keyword_encontrado}'")
-            except Exception as e:
-                logger.error(f"Erro ao buscar arquivos: {e}", exc_info=True)
-        
         if contem_trigger or contem_redacao:
             # Se contém palavras de redação, trata como correção de redação
             if contem_redacao:
@@ -218,6 +183,41 @@ async def handle_message(message: types.Message):
                         "Tente novamente em alguns instantes."
                     )
                 return
+                
+        # Se contém palavra-chave de busca, realiza busca no CSV
+        if contem_search_keyword:
+            from services.file_search_service import file_search_service
+            
+            try:
+                # Busca por todas as palavras-chave encontradas
+                resultados = file_search_service.search_files_multiple_terms(search_keyword_encontrado, limit=4)
+                
+                if resultados:
+                    mensagem_busca = "🔍 Aqui está uma sugestão para o que você está buscando:\n\n"
+                    
+                    for arquivo in resultados:
+                        file_name = arquivo.get('file_name', 'Arquivo sem nome')
+                        link = arquivo.get('link_completo', '')
+                        
+                        # Escapa caracteres especiais do HTML
+                        file_name_escaped = file_name.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                        
+                        if link:
+                            # Usa HTML para criar link clicável
+                            mensagem_busca += f"📄 <b>{file_name_escaped}</b>\n"
+                            mensagem_busca += f"🔗 <a href=\"{link}\">{link}</a>\n\n"
+                        else:
+                            mensagem_busca += f"📄 <b>{file_name_escaped}</b>\n\n"
+                    
+                    await message.reply(mensagem_busca, parse_mode='HTML')
+                    logger.info(f"Resultados de busca enviados para usuário {user_id}: {len(resultados)} arquivo(s) (termos: {search_keyword_encontrado})")
+                    return
+                else:
+                    logger.info(f"Nenhum arquivo encontrado para termos '{search_keyword_encontrado}'")
+            except Exception as e:
+                logger.error(f"Erro ao buscar arquivos: {e}", exc_info=True)
+        
+        
     
     except Exception as e:
         logger.error(f"Erro ao processar mensagem: {e}", exc_info=True)

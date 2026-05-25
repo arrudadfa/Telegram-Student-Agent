@@ -187,11 +187,6 @@ class PaymentService:
             logger.error(f"Erro ao verificar pagamento no Mercado Pago para usuário {user_id}: {e}")
             return False
     
-    def manual_confirm_payment(self, user_id: int) -> bool:
-        """
-        Confirma pagamento manualmente (para uso administrativo)
-        """
-        return self.confirm_payment(user_id)
 
 # Instância global do serviço
 payment_service = PaymentService()
