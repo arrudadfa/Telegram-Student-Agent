@@ -21,8 +21,8 @@ Telegram Student Agent/
 │   ├── redacao_service.py          # Correção de redações usando OpenAI
 │   ├── daily_limit_service.py      # Controle de limites diários
 │   ├── propaganda_service.py       # Propagandas diárias automáticas
-│   ├── cronograma_service.py      # Serviço de cronograma (em desenvolvimento)
-│   └── openai_service.py           # Serviços auxiliares OpenAI
+│   ├── file_search_service.py      # Busca de arquivos por palavras-chave
+│   └── openai_service.py           # Respostas GPT para triggers gerais
 │
 ├── webhook/                         # Webhooks para pagamentos
 │   ├── payment_webhook.py          # Handler de webhooks do Mercado Pago
