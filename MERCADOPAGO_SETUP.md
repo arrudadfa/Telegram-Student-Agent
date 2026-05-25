@@ -32,8 +32,8 @@ MERCADOPAGO_PUBLIC_KEY=sua_public_key_aqui
 Edite o arquivo `config.py`:
 
 ```python
-MERCADOPAGO_ACCESS_TOKEN = 'APP_USR-5199900670997861-011920-7ec613e6e5f0f5405f5a5795c51a8078-135152840'
-MERCADOPAGO_PUBLIC_KEY = 'APP_USR-c9800f79-6a4b-418e-8e70-7c3408c89853'
+MERCADOPAGO_ACCESS_TOKEN = 'seu_access_token_aqui'
+MERCADOPAGO_PUBLIC_KEY = 'sua_public_key_aqui'
 ```
 
 ## Passo 4: Configurar Webhook no Mercado Pago
@@ -41,7 +41,7 @@ MERCADOPAGO_PUBLIC_KEY = 'APP_USR-c9800f79-6a4b-418e-8e70-7c3408c89853'
 1. No painel do Mercado Pago, vá em **Webhooks**
 2. Configure a URL do webhook:
    ```
-   https://b597ffb1a237.ngrok-free.app/webhook/payment
+   https://seu-ngrok-url-aqui/webhook/payment
    ```
 3. Selecione os eventos:
    - `payment`
@@ -82,5 +82,5 @@ Para testar sem usar dinheiro real:
 ### Webhook não está recebendo notificações
 - Verifique se o ngrok está rodando
 - Verifique se a URL do webhook está correta no painel do Mercado Pago
-- Teste o endpoint manualmente: `curl https://b597ffb1a237.ngrok-free.app/health`
+- Teste o endpoint manualmente: `curl https://seu-ngrok-url-aqui/health`
 

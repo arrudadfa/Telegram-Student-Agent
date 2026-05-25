@@ -5,7 +5,7 @@ Este módulo gerencia o recebimento de notificações de pagamento via webhook.
 ## Configuração
 
 ### 1. Ngrok
-O túnel ngrok já está configurado: `https://b597ffb1a237.ngrok-free.app`
+O túnel ngrok deve ser configurado, por exemplo: `https://seu-ngrok-url.ngrok-free.app`
 
 ### 2. Endpoints Disponíveis
 
@@ -17,7 +17,7 @@ O túnel ngrok já está configurado: `https://b597ffb1a237.ngrok-free.app`
 Configure o webhook no seu provedor de pagamento (Mercado Pago, PagSeguro, etc.) para enviar notificações para:
 
 ```
-https://b597ffb1a237.ngrok-free.app/webhook/payment
+https://seu-ngrok-url.ngrok-free.app/webhook/payment
 ```
 
 ### 4. Formato Esperado do Webhook
@@ -77,7 +77,7 @@ Para produção, implemente a validação de assinatura no método `validate_web
 Você pode testar o webhook usando curl:
 
 ```bash
-curl -X POST https://b597ffb1a237.ngrok-free.app/webhook/payment \
+curl -X POST https://seu-ngrok-url.ngrok-free.app/webhook/payment \
   -H "Content-Type: application/json" \
   -d '{
     "type": "payment",
@@ -92,7 +92,7 @@ curl -X POST https://b597ffb1a237.ngrok-free.app/webhook/payment \
 Ou testar o health check:
 
 ```bash
-curl https://b597ffb1a237.ngrok-free.app/health
+curl https://seu-ngrok-url.ngrok-free.app/health
 ```
 
 

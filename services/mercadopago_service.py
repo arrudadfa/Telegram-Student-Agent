@@ -5,7 +5,7 @@ import aiohttp
 import json
 from typing import Optional, Dict
 from datetime import datetime
-from config import logger
+from config import logger, NGROK_URL
 
 class MercadoPagoService:
     """
@@ -43,6 +43,11 @@ class MercadoPagoService:
         if not description:
             description = f"GPT Premium - Usuário {user_id}"
         
+        notification_url = None
+        if NGROK_URL:
+            base_url = NGROK_URL.rstrip('/')
+            notification_url = f"{base_url}/webhook/payment"
+
         # Dados do pagamento
         payment_data = {
             "transaction_amount": amount,
@@ -55,9 +60,11 @@ class MercadoPagoService:
                 "user_id": str(user_id),
                 "telegram_user_id": user_id,
                 "service": "gpt_premium"
-            },
-            "notification_url": f"https://b597ffb1a237.ngrok-free.app/webhook/payment"  # URL do webhook
+            }
         }
+
+        if notification_url:
+            payment_data["notification_url"] = notification_url
         
         try:
             async with aiohttp.ClientSession() as session:
