@@ -29,6 +29,18 @@ def test_generate_news_digest_returns_stripped_text(monkeypatch):
     assert kwargs["tools"] == [{"type": "web_search"}]
 
 
+def test_generate_news_digest_normalizes_double_star(monkeypatch):
+    fake_resp = MagicMock()
+    fake_resp.output_text = "*Título*\n- **Bacen:** 140 vagas"
+    fake_create = AsyncMock(return_value=fake_resp)
+    monkeypatch.setattr(
+        news_service.openai_client, "responses", MagicMock(create=fake_create)
+    )
+    result = asyncio.run(news_service.generate_news_digest())
+    assert "**" not in result
+    assert "*Bacen:*" in result
+
+
 def test_generate_news_digest_none_on_empty(monkeypatch):
     fake_resp = MagicMock()
     fake_resp.output_text = "   "

@@ -13,6 +13,12 @@ from config import (
 )
 
 
+def _to_telegram_markdown(text: str) -> str:
+    """Normaliza o negrito para o Markdown legado do Telegram, que usa UMA estrela.
+    O modelo às vezes devolve **negrito** (duas estrelas), que o Telegram não renderiza."""
+    return text.replace("**", "*")
+
+
 def build_news_input(today: date) -> str:
     """Monta o texto de entrada (turno do usuário) com a data de hoje."""
     data_str = today.strftime("%d/%m/%Y")
@@ -33,7 +39,7 @@ async def generate_news_digest() -> str | None:
             input=build_news_input(today),
             tools=[{"type": "web_search"}],
         )
-        text = (response.output_text or "").strip()
+        text = _to_telegram_markdown((response.output_text or "").strip())
         if not text:
             logger.error("Resumo de notícias retornou vazio da OpenAI")
             return None

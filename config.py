@@ -204,6 +204,8 @@ Instruções de execução:
 - Apresente as notícias organizadas por tema, em português, de forma clara e objetiva.
 - Inclua datas, prazos e links quando disponíveis.
 - Se não houver novidades relevantes em algum tema no dia, informe brevemente.
+- Comece a resposta diretamente pelo cabeçalho do formato (a linha com 📋), sem qualquer texto introdutório ou observações.
+- Para negrito, use sempre UMA única estrela (ex.: *texto*); nunca use duas estrelas seguidas.
 
 Formato de saída (use *negrito de uma estrela* nos títulos e NÃO use ###):
 
