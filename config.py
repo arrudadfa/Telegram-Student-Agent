@@ -2,6 +2,7 @@ import os
 import csv
 from dotenv import load_dotenv
 import logging
+from zoneinfo import ZoneInfo
 from aiogram import Bot, Dispatcher, Router
 from openai import AsyncOpenAI
 
@@ -38,6 +39,16 @@ if not OPENAI_API_KEY:
 
 # IDs dos grupos permitidos
 ALLOWED_GROUP_IDS = [6368750324, 163177765, -1001937153848, 2038662917, 1098473382]
+
+# Fuso horário oficial do bot (notícias e propaganda usam horário de Brasília)
+BRAZIL_TZ = ZoneInfo("America/Sao_Paulo")
+
+# Grupo t.me/vestibulareseconcursos — único destino do resumo diário e da propaganda
+VESTIBULARES_GROUP_ID = -1001937153848
+
+# Modelo usado para o resumo de notícias (precisa suportar a ferramenta web_search da
+# Responses API). Se a conta não tiver acesso a este modelo, troque por "gpt-4.1".
+NEWS_MODEL = "gpt-5.5"
 
 # IDs dos administradores (para comandos administrativos)
 ADMIN_IDS = [6368750324, 163177765]  # Adicione os IDs dos administradores aqui
@@ -172,6 +183,42 @@ Usar linguagem simples, direta e motivadora.
 Evitar excesso de texto explicativo.
 
 O resultado final deve ser apresentado de forma clara, com dias da semana, matérias e tempo dedicado a cada bloco de estudo.
+"""
+
+# Prompt para o resumo diário de notícias (busca web). Formatação compatível com o
+# Markdown legado do Telegram: negrito de UMA estrela (*Título*) e emojis nos títulos,
+# sem usar ### (que o Telegram não renderiza).
+NEWS_SYSTEM_PROMPT = """
+Você é um assistente especializado em concursos públicos e vestibulares no Brasil. Sua tarefa é buscar e resumir as notícias mais recentes do dia sobre os seguintes temas:
+
+1. Concursos públicos federais: novos editais abertos, inscrições encerradas, resultados publicados, datas de provas, vagas anunciadas por órgãos federais (Receita Federal, Banco Central, IBGE, Ministérios, autarquias federais, etc.).
+
+2. Vestibulares: novidades sobre ENEM, FUVEST, UNICAMP, UEL, UFPR e outros vestibulares de universidades públicas e privadas — datas, gabaritos, resultados, convocações do SISU/PROUNI/FIES.
+
+3. Concurso para Praticante de Prático: qualquer notícia, edital, resultado, convocação ou atualização sobre o concurso para praticante de prático (praticagem marítima no Brasil), incluindo editais de praticagem dos portos de Santos, Rio de Janeiro, Paranaguá, Itajaí, Salvador, Vitória, etc.
+
+Instruções de execução:
+- Use a busca na web para encontrar notícias recentes de hoje sobre cada um dos três temas.
+- Faça buscas em português (ex.: "concursos públicos federais edital", "vestibular ENEM notícias", "concurso praticante de prático praticagem").
+- Priorize fontes confiáveis: sites oficiais de órgãos públicos, Diário Oficial da União (DOU), QConcursos, Gran Cursos, Estratégia Concursos, G1, portais educacionais.
+- Apresente as notícias organizadas por tema, em português, de forma clara e objetiva.
+- Inclua datas, prazos e links quando disponíveis.
+- Se não houver novidades relevantes em algum tema no dia, informe brevemente.
+- Comece a resposta diretamente pelo cabeçalho do formato (a linha com 📋), sem qualquer texto introdutório ou observações.
+- Para negrito, use sempre UMA única estrela (ex.: *texto*); nunca use duas estrelas seguidas.
+
+Formato de saída (use *negrito de uma estrela* nos títulos e NÃO use ###):
+
+📋 *NOTÍCIAS DE CONCURSOS — [DATA DE HOJE]*
+
+🏛️ *Concursos Públicos Federais*
+[notícias e resumos]
+
+🎓 *Vestibulares*
+[notícias e resumos]
+
+⚓ *Praticante de Prático*
+[notícias e resumos]
 """
 
 # Configuração do Webhook (Ngrok)
