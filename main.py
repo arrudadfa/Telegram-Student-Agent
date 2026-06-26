@@ -27,10 +27,10 @@ async def main():
         logger.info("Iniciando servidor webhook...")
         asyncio.create_task(start_webhook_server())
         
-        # Inicia o scheduler de propagandas diárias em background
-        logger.info("Iniciando scheduler de propagandas...")
+        # Inicia o scheduler de envios diários (notícias + propaganda de sexta)
+        logger.info("Iniciando scheduler de envios diários...")
         asyncio.create_task(propaganda_service.start_daily_scheduler())
-        logger.info("Scheduler de propagandas diárias iniciado")
+        logger.info("Scheduler de envios diários iniciado")
         
         # Verifica se o bot está configurado corretamente
         logger.info("Verificando configuração do bot...")
