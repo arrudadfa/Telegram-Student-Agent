@@ -2,8 +2,9 @@
 Serviço para gerar códigos PIX dinâmicos via Mercado Pago API
 """
 import json
+import os
 from typing import Optional, Dict
-from config import logger
+from config import logger, PIX_MAPPINGS_FILE
 from services.products_config import get_product
 from services.gpt_service import GPT_Service_Price
 
@@ -15,11 +16,18 @@ class PIXGenerator:
     Gera códigos PIX dinâmicos via Mercado Pago API
     """
     
-    def __init__(self, mapping_file: str = "data/pix_mappings.json"):
-        self.mapping_file = mapping_file
+    def __init__(self, mapping_file: str = None):
+        self.mapping_file = mapping_file or PIX_MAPPINGS_FILE
         self.payment_to_user: dict = {}  # {payment_id: user_id}
         self.user_to_payment: dict = {}  # {user_id: payment_id}
+        self._ensure_data_dir()
         self._load_mappings()
+
+    def _ensure_data_dir(self):
+        """Garante que o diretório de dados existe"""
+        dir_path = os.path.dirname(self.mapping_file)
+        if dir_path:
+            os.makedirs(dir_path, exist_ok=True)
     
     def _load_mappings(self):
         """Carrega mapeamentos de pagamentos para usuários"""
@@ -28,8 +36,12 @@ class PIXGenerator:
             if os.path.exists(self.mapping_file):
                 with open(self.mapping_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                    self.payment_to_user = data.get('payment_to_user', {})
-                    self.user_to_payment = data.get('user_to_payment', {})
+                    self.payment_to_user = {
+                        str(k): int(v) for k, v in data.get('payment_to_user', {}).items()
+                    }
+                    self.user_to_payment = {
+                        int(k): str(v) for k, v in data.get('user_to_payment', {}).items()
+                    }
                 logger.info(f"Carregados {len(self.payment_to_user)} mapeamentos de pagamento")
         except Exception as e:
             logger.error(f"Erro ao carregar mapeamentos: {e}")
@@ -43,7 +55,7 @@ class PIXGenerator:
             os.makedirs(os.path.dirname(self.mapping_file) if os.path.dirname(self.mapping_file) else ".", exist_ok=True)
             data = {
                 'payment_to_user': self.payment_to_user,
-                'user_to_payment': self.user_to_payment
+                'user_to_payment': {str(k): v for k, v in self.user_to_payment.items()},
             }
             with open(self.mapping_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)

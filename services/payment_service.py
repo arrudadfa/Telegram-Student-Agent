@@ -2,14 +2,14 @@ import json
 import os
 from typing import Set, Optional
 from datetime import datetime
-from config import logger
+from config import logger, PAID_USERS_FILE
 
 class PaymentService:
     """
     Gerencia pagamentos e acesso ao GPT premium
     """
-    def __init__(self, data_file: str = "data/paid_users.json"):
-        self.data_file = data_file
+    def __init__(self, data_file: str = None):
+        self.data_file = data_file or PAID_USERS_FILE
         self.paid_users: Set[int] = set()
         self.pending_payments: dict = {}  # {user_id: {'timestamp': datetime, 'amount': float}}
         self._ensure_data_dir()

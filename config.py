@@ -19,6 +19,13 @@ else:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Diretório de dados persistentes (volume Docker: montar em /app/data)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.getenv("DATA_DIR", os.path.join(BASE_DIR, "data"))
+PAID_USERS_FILE = os.path.join(DATA_DIR, "paid_users.json")
+PIX_MAPPINGS_FILE = os.path.join(DATA_DIR, "pix_mappings.json")
+os.makedirs(DATA_DIR, exist_ok=True)
+
 # Tokens e credenciais - Carregados de variáveis de ambiente
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
@@ -252,4 +259,6 @@ else:
 if NGROK_URL:
     logger.info(f"Ngrok URL configurado: {NGROK_URL}")
 else:
-    logger.warning("NGROK_URL não configurado - webhook pode não funcionar") 
+    logger.warning("NGROK_URL não configurado - webhook pode não funcionar")
+
+logger.info(f"Diretório de dados persistentes: {DATA_DIR}") 
