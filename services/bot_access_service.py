@@ -9,6 +9,20 @@ from services.products_config import get_product
 BOT_ACCESS_PRODUCT_ID = 'bot_access'
 
 
+PITCH_MESSAGE = (
+    "Olá! Eu sou o Student_agent. Estou aqui para te ajudar a passar em um vestibular "
+    "ou em um concurso público. Minha infraestrutura precisa de suporte e para continuarmos "
+    "nosso plano preciso de um suporte. A quantia de 10 reais ja me ajuda muito. Isso também "
+    "cria um compromisso de uso e de estudo. Meu desenvolvedor trabalha todos os dias neste "
+    "projeto ajudando pessoas a ter o mesmo sucesso que ele.\n"
+    "Quer chegar lá também?"
+)
+
+
+def get_pitch_message() -> str:
+    return PITCH_MESSAGE
+
+
 def get_paywall_message() -> str:
     product = get_product(BOT_ACCESS_PRODUCT_ID)
     price = product.price if product else 10.0

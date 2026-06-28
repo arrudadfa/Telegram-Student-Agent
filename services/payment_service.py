@@ -102,6 +102,7 @@ class PaymentService:
 
         self._save_data()
         logger.info(f"Acesso ao bot confirmado para usuário {user_id}")
+        self._clear_outreach(user_id)
         return True
 
     def grant_bot_access(self, user_id: int) -> bool:
@@ -112,6 +113,7 @@ class PaymentService:
         self.bot_access_users.add(user_id)
         self._save_data()
         logger.info(f"Acesso ao bot concedido manualmente para usuário {user_id}")
+        self._clear_outreach(user_id)
         return True
 
     def confirm_payment_for_product(self, user_id: int, product_id: str) -> bool:
@@ -119,6 +121,13 @@ class PaymentService:
         if product_id == 'bot_access':
             return self.confirm_bot_access(user_id)
         return self.confirm_payment(user_id)
+
+    def _clear_outreach(self, user_id: int):
+        try:
+            from services.unpaid_outreach_service import unpaid_outreach_service
+            unpaid_outreach_service.clear_user(user_id)
+        except Exception as e:
+            logger.warning(f"Erro ao limpar outreach do usuário {user_id}: {e}")
     
     def register_pending_payment(self, user_id: int, amount: float = None, payment_reference: str = None, pix_code: str = None, product_id: str = 'gpt_premium'):
         """Registra um pagamento pendente"""
