@@ -34,6 +34,24 @@ usuarios_aguardando_cronograma = {}
 ultimo_pedido_liberacao = {}
 LIBERACAO_COOLDOWN_HORAS = 24
 
+
+async def reply_with_gpt(message: types.Message, user_id: int, prompt: str) -> None:
+    """Envia resposta do GPT-4o ao usuário."""
+    from services.openai_service import get_openai_response
+
+    try:
+        logger.info(f"Processando mensagem com GPT-4o para usuário {user_id}")
+        responses = await get_openai_response(prompt)
+        for response_text in responses:
+            await message.reply(response_text)
+        logger.info(f"Resposta GPT-4o enviada para usuário {user_id}")
+    except Exception as e:
+        logger.error(f"Erro ao obter resposta do GPT-4o: {e}", exc_info=True)
+        await message.reply(
+            "❌ Desculpe, ocorreu um erro ao processar sua mensagem. "
+            "Tente novamente em alguns instantes."
+        )
+
 # Cria o menu de botões
 def criar_menu_botoes() -> ReplyKeyboardMarkup:
     """Cria o menu de botões com os comandos principais"""
@@ -186,24 +204,7 @@ async def handle_message(message: types.Message):
             
             # Comportamento para outras triggers (não relacionadas a redação): usa GPT-4o
             if contem_trigger:
-                from services.openai_service import get_openai_response
-                
-                try:
-                    logger.info(f"Processando mensagem com GPT-4o para usuário {user_id}")
-                    # Obtém resposta do GPT-4o
-                    responses = await get_openai_response(message.text)
-                    
-                    # Envia resposta(s) - pode ser dividida em múltiplas mensagens se muito longa
-                    for response_text in responses:
-                        await message.reply(response_text)
-                    
-                    logger.info(f"Resposta GPT-4o enviada para usuário {user_id}")
-                except Exception as e:
-                    logger.error(f"Erro ao obter resposta do GPT-4o: {e}", exc_info=True)
-                    await message.reply(
-                        "❌ Desculpe, ocorreu um erro ao processar sua mensagem. "
-                        "Tente novamente em alguns instantes."
-                    )
+                await reply_with_gpt(message, user_id, message.text)
                 return
                 
         # Se contém palavra-chave de busca, realiza busca no CSV
@@ -238,9 +239,12 @@ async def handle_message(message: types.Message):
                     logger.info(f"Nenhum arquivo encontrado para termos '{search_keyword_encontrado}'")
             except Exception as e:
                 logger.error(f"Erro ao buscar arquivos: {e}", exc_info=True)
-        
-        
-    
+
+        # No privado, quem tem acesso pode conversar livremente (sem palavra-chave)
+        if message.chat.type == 'private':
+            await reply_with_gpt(message, user_id, message.text)
+            return
+
     except Exception as e:
         logger.error(f"Erro ao processar mensagem: {e}", exc_info=True)
         try:
@@ -259,6 +263,30 @@ async def handle_unpaid_user(message: types.Message, texto: str) -> bool:
 
     if texto.startswith('/liberacao') or texto.startswith('/liberar_acesso'):
         await handle_access_request(message)
+        return True
+
+    if texto.startswith('/start') or texto == '/start':
+        unpaid_outreach_service.record_pitch(user_id)
+        await message.reply(get_pitch_message())
+        logger.info(f"Pitch enviado para usuário não pagante {user_id} (/start)")
+        return True
+
+    if texto.startswith('/acesso') or texto.startswith('/pagar'):
+        if message.chat.type in ['group', 'supergroup']:
+            await message.reply(
+                "💬 Para receber o PIX de R$ 10,00, me envie uma mensagem privada."
+            )
+            return True
+        unpaid_outreach_service.record_pix(user_id)
+        await handle_bot_access_payment(message, record_outreach=False)
+        logger.info(f"Cobrança PIX enviada para usuário não pagante {user_id} (/acesso)")
+        return True
+
+    if texto.startswith('/gpt'):
+        await message.reply(
+            "🔒 Você precisa de acesso ao bot antes de usar o GPT Premium.\n\n"
+            + get_pitch_message()
+        )
         return True
 
     action = unpaid_outreach_service.decide_action(user_id)
