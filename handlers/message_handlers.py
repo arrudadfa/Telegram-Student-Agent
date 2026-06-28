@@ -101,8 +101,9 @@ async def handle_message(message: types.Message):
             await handle_liberar_command(message)
             return
 
-        # Paywall: só conversa com quem pagou R$ 10 (exceto dono)
-        if not payment_service.has_bot_access(user_id):
+        # Paywall só no privado; em grupos o bot só reage a comandos/palavras-chave
+        is_private = message.chat.type == 'private'
+        if is_private and not payment_service.has_bot_access(user_id):
             if await handle_unpaid_user(message, texto):
                 return
             return
@@ -240,8 +241,8 @@ async def handle_message(message: types.Message):
             except Exception as e:
                 logger.error(f"Erro ao buscar arquivos: {e}", exc_info=True)
 
-        # No privado, quem tem acesso pode conversar livremente (sem palavra-chave)
-        if message.chat.type == 'private':
+        # No privado, quem tem acesso conversa livremente (sem palavra-chave)
+        if is_private:
             await reply_with_gpt(message, user_id, message.text)
             return
 
