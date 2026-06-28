@@ -80,9 +80,16 @@ async def get_payment_message(user_id: int = None, pix_data: dict = None, produc
         "2. Abra seu app de pagamento (banco, carteira digital, etc.)\n"
         f"3. Confirme o pagamento de R$ {product.price:.2f}\n"
         "4. O sistema verificará automaticamente via Mercado Pago\n"
-        "5. Você receberá o link vitalício do GPT assim que o pagamento for confirmado\n\n"
+    )
+
+    if product_id == 'bot_access':
+        message += "5. Você receberá confirmação assim que o pagamento for aprovado\n\n"
+    else:
+        message += "5. Você receberá o link vitalício do GPT assim que o pagamento for confirmado\n\n"
+
+    message += (
         "⏰ **Verificação:** O pagamento será verificado automaticamente. "
-        "Você receberá o link vitalício assim que o pagamento for confirmado."
+        "Você será avisado assim que for confirmado."
     )
     
     return message

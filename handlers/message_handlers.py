@@ -3,11 +3,19 @@ from aiogram import types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from config import (
     router, logger, TRIGGER_KEYWORDS, SEARCH_KEYWORDS, ALLOWED_GROUP_IDS, 
-    ADMIN_IDS, bot, openai_client, CRONOGRAMA_SYSTEM_PROMPT
+    ADMIN_IDS, BOT_OWNER_ID, bot, openai_client, CRONOGRAMA_SYSTEM_PROMPT
 )
 from services.redacao_service import RedacaoService
 from services.daily_limit_service import daily_limit_service
 from services.payment_service import payment_service
+from services.bot_access_service import (
+    BOT_ACCESS_PRODUCT_ID,
+    get_paywall_message,
+    get_bot_access_granted_message,
+    get_access_request_sent_message,
+    get_access_request_notification,
+    get_access_granted_by_admin_message,
+)
 from services.gpt_service import (
     get_gpt_info_message, 
     get_payment_message, 
@@ -20,6 +28,10 @@ usuarios_aguardando_redacao = {}
 
 # Dicionário para rastrear usuários que estão no fluxo de criação de cronograma
 usuarios_aguardando_cronograma = {}
+
+# Cooldown de pedidos de liberação (user_id -> timestamp)
+ultimo_pedido_liberacao = {}
+LIBERACAO_COOLDOWN_HORAS = 24
 
 # Cria o menu de botões
 def criar_menu_botoes() -> ReplyKeyboardMarkup:
@@ -60,6 +72,21 @@ async def handle_message(message: types.Message):
         texto = message.text.lower()
         user_id = message.from_user.id
         logger.info(f"Mensagem recebida de {user_id} ({message.chat.type}): {texto[:50]}")
+
+        # Comandos administrativos (sempre disponíveis para admins/dono)
+        if texto.startswith('/confirmar_pagamento') and user_id in ADMIN_IDS:
+            await handle_confirm_payment_command(message)
+            return
+
+        if texto.startswith('/liberar') and user_id == BOT_OWNER_ID:
+            await handle_liberar_command(message)
+            return
+
+        # Paywall: só conversa com quem pagou R$ 10 (exceto dono)
+        if not payment_service.has_bot_access(user_id):
+            if await handle_unpaid_user(message, texto):
+                return
+            return
 
         # PRIORIDADE 1: Verifica se o usuário está aguardando resposta para cronograma
         if user_id in usuarios_aguardando_cronograma:
@@ -109,11 +136,6 @@ async def handle_message(message: types.Message):
         
         if texto.startswith('/cronograma') or texto.lower() == '📅 criar cronograma':
             await handle_cronograma_command(message)
-            return
-        
-        # Comando administrativo para confirmar pagamento
-        if texto.startswith('/confirmar_pagamento') and user_id in ADMIN_IDS:
-            await handle_confirm_payment_command(message)
             return
 
         # PRIORIDADE 4: Verifica se a mensagem contém palavras-chave de trigger
@@ -225,6 +247,199 @@ async def handle_message(message: types.Message):
                 await message.reply("❌ Ocorreu um erro ao processar sua mensagem. Tente novamente.")
         except:
             pass
+
+async def handle_unpaid_user(message: types.Message, texto: str) -> bool:
+    """
+    Trata usuários sem acesso ao bot.
+    Retorna True se a mensagem foi tratada.
+    """
+    if texto.startswith('/start') or texto == '/start':
+        await message.reply(get_paywall_message(), parse_mode='Markdown')
+        return True
+
+    if texto.startswith('/acesso') or texto.startswith('/pagar'):
+        await handle_bot_access_payment(message)
+        return True
+
+    if texto.startswith('/liberacao') or texto.startswith('/liberar_acesso'):
+        await handle_access_request(message)
+        return True
+
+    if texto.startswith('/gpt'):
+        await message.reply(
+            "🔒 Você precisa de acesso ao bot antes de usar o GPT Premium.\n\n"
+            + get_paywall_message(),
+            parse_mode='Markdown'
+        )
+        return True
+
+    await message.reply(get_paywall_message(), parse_mode='Markdown')
+    return True
+
+
+async def handle_bot_access_payment(message: types.Message):
+    """Gera PIX de R$ 10 para acesso ao bot."""
+    user_id = message.from_user.id
+
+    if message.chat.type in ['group', 'supergroup']:
+        await message.reply(
+            "🔒 **Para sua segurança, o código PIX só pode ser enviado em conversas privadas.**\n\n"
+            "💬 Me envie uma mensagem privada e digite /acesso.",
+            parse_mode='Markdown'
+        )
+        return
+
+    from services.pix_generator import pix_generator
+
+    product_id = BOT_ACCESS_PRODUCT_ID
+    pix_data = await pix_generator.generate_pix_for_user(user_id, product_id=product_id)
+
+    if not pix_data:
+        await message.reply(
+            "❌ Erro ao gerar código PIX. "
+            "Tente novamente em alguns instantes."
+        )
+        return
+
+    payment_msg = await get_payment_message(user_id, pix_data, product_id=product_id)
+    await message.reply(payment_msg, parse_mode='Markdown')
+
+    if pix_data.get('qr_code_base64'):
+        try:
+            import base64
+            from aiogram.types import BufferedInputFile
+
+            qr_image_data = base64.b64decode(pix_data['qr_code_base64'])
+            qr_file = BufferedInputFile(qr_image_data, filename="qrcode.png")
+            await message.answer_photo(qr_file, caption="📷 QR Code para pagamento PIX")
+        except Exception as e:
+            logger.error(f"Erro ao enviar QR Code: {e}")
+
+    payment_id = pix_data.get('payment_id')
+    payment_service.register_pending_payment(
+        user_id,
+        payment_reference=payment_id,
+        pix_code=pix_data.get('pix_code'),
+        product_id=product_id,
+    )
+    asyncio.create_task(check_bot_access_payment_periodically(user_id))
+
+
+async def check_bot_access_payment_periodically(
+    user_id: int, max_checks: int = 60, interval: int = 30
+):
+    """Verifica pagamento de acesso ao bot a cada 30s por até 30 minutos."""
+    for check in range(max_checks):
+        await asyncio.sleep(interval)
+
+        if payment_service.has_bot_access(user_id):
+            try:
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=get_bot_access_granted_message(),
+                    parse_mode='Markdown',
+                )
+                logger.info(f"Acesso ao bot confirmado para usuário {user_id}")
+            except Exception as e:
+                logger.error(f"Erro ao enviar confirmação de acesso para {user_id}: {e}")
+            break
+
+        if await payment_service.verify_payment_for_user(user_id):
+            if payment_service.has_bot_access(user_id):
+                try:
+                    await bot.send_message(
+                        chat_id=user_id,
+                        text=get_bot_access_granted_message(),
+                        parse_mode='Markdown',
+                    )
+                except Exception as e:
+                    logger.error(f"Erro ao enviar confirmação de acesso para {user_id}: {e}")
+            break
+
+        pending = payment_service.get_pending_payment(user_id)
+        if pending:
+            logger.info(
+                f"Aguardando pagamento de acesso para {user_id} "
+                f"(verificação {check + 1}/{max_checks})"
+            )
+
+
+async def handle_access_request(message: types.Message):
+    """Encaminha pedido de liberação gratuita ao dono do bot."""
+    from datetime import datetime, timedelta
+
+    user_id = message.from_user.id
+    agora = datetime.now()
+
+    ultimo = ultimo_pedido_liberacao.get(user_id)
+    if ultimo and agora - ultimo < timedelta(hours=LIBERACAO_COOLDOWN_HORAS):
+        horas_restantes = LIBERACAO_COOLDOWN_HORAS - (agora - ultimo).seconds // 3600
+        await message.reply(
+            f"⏳ Você já enviou um pedido recentemente.\n"
+            f"Tente novamente em cerca de {horas_restantes}h ou pague via /acesso."
+        )
+        return
+
+    ultimo_pedido_liberacao[user_id] = agora
+
+    user = message.from_user
+    notificacao = get_access_request_notification(
+        user_id, user.full_name, user.username
+    )
+
+    try:
+        await bot.send_message(
+            chat_id=BOT_OWNER_ID,
+            text=notificacao,
+            parse_mode='Markdown',
+        )
+        await message.reply(get_access_request_sent_message(), parse_mode='Markdown')
+        logger.info(f"Pedido de liberação enviado por {user_id}")
+    except Exception as e:
+        logger.error(f"Erro ao enviar pedido de liberação: {e}")
+        await message.reply(
+            "❌ Não foi possível enviar o pedido. "
+            "Entre em contato diretamente com @arrudadfa."
+        )
+
+
+async def handle_liberar_command(message: types.Message):
+    """Libera acesso ao bot manualmente (somente dono)."""
+    try:
+        parts = message.text.split()
+        if len(parts) < 2:
+            await message.reply(
+                "📝 Formato: /liberar <user_id>\n"
+                "Exemplo: /liberar 123456789"
+            )
+            return
+
+        user_id_to_grant = int(parts[1])
+
+        if payment_service.grant_bot_access(user_id_to_grant):
+            try:
+                await bot.send_message(
+                    chat_id=user_id_to_grant,
+                    text=get_access_granted_by_admin_message(),
+                    parse_mode='Markdown',
+                )
+                await message.reply(
+                    f"✅ Acesso liberado para usuário {user_id_to_grant}!"
+                )
+            except Exception as e:
+                await message.reply(
+                    f"✅ Acesso registrado para {user_id_to_grant}, "
+                    f"mas não foi possível avisar o usuário: {e}"
+                )
+        else:
+            await message.reply(
+                f"ℹ️ Usuário {user_id_to_grant} já tinha acesso ao bot."
+            )
+    except ValueError:
+        await message.reply("❌ ID de usuário inválido!")
+    except Exception as e:
+        logger.error(f"Erro ao liberar acesso: {e}")
+        await message.reply(f"❌ Erro: {e}")
 
 async def handle_start_command(message: types.Message):
     """

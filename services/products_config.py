@@ -19,6 +19,14 @@ class Product:
 
 # Lista de produtos disponíveis
 PRODUCTS: Dict[str, Product] = {
+    'bot_access': Product(
+        id='bot_access',
+        name='Acesso ao Bot',
+        product_type='bot_access',
+        price=10.0,
+        description='Acesso completo ao bot de estudos (redação, busca, cronograma e dúvidas)',
+        active=True
+    ),
     'gpt_premium': Product(
         id='gpt_premium',
         name='GPT Premium',

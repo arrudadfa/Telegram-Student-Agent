@@ -71,11 +71,6 @@ async def handle_payment_webhook(request):
             status = payment_info.get('status', '').lower()
             amount = float(payment_info.get('transaction_amount', 0))
             
-            # Obtém o valor esperado do produto (padrão: gpt_premium)
-            from services.products_config import get_product
-            product = get_product('gpt_premium')  # Por padrão, assume GPT Premium
-            expected_amount = product.price if product else 50.0
-            
             # Tenta identificar o user_id
             user_id = None
             
@@ -109,6 +104,12 @@ async def handle_payment_webhook(request):
             # Processa diferentes status de pagamento
             if status == 'approved':
                 # Pagamento aprovado - confirma o acesso
+                pending = payment_service.get_pending_payment(user_id)
+                product_id = pending.get('product_id', 'gpt_premium') if pending else 'gpt_premium'
+                from services.products_config import get_product
+                product = get_product(product_id)
+                expected_amount = product.price if product else 50.0
+
                 if amount < expected_amount:
                     logger.warning(f"Valor do pagamento insuficiente: {amount} < {expected_amount}")
                     return web.json_response({
@@ -116,21 +117,21 @@ async def handle_payment_webhook(request):
                         'message': 'Insufficient payment amount'
                     }, status=400)
                 
-                # Confirma o pagamento (inclui limpeza do mapeamento PIX)
-                if payment_service.confirm_payment(user_id, pix_code=None):
-                    # Envia mensagem de acesso ao usuário
+                if payment_service.confirm_payment_for_product(user_id, product_id):
                     try:
                         from config import bot
-                        # Obtém product_id do pagamento pendente, se disponível
-                        pending = payment_service.get_pending_payment(user_id)
-                        product_id = pending.get('product_id', 'gpt_premium') if pending else 'gpt_premium'
-                        access_message = get_gpt_access_message(product_id)
+                        from services.bot_access_service import get_bot_access_granted_message
+
+                        if product_id == 'bot_access':
+                            access_message = get_bot_access_granted_message()
+                        else:
+                            access_message = get_gpt_access_message(product_id)
                         await bot.send_message(
                             chat_id=user_id,
                             text=access_message,
                             parse_mode='Markdown'
                         )
-                        logger.info(f"Pagamento confirmado e link enviado para usuário {user_id}")
+                        logger.info(f"Pagamento confirmado ({product_id}) para usuário {user_id}")
                     except Exception as e:
                         logger.error(f"Erro ao enviar mensagem para usuário {user_id}: {e}")
                     

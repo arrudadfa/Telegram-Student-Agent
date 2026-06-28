@@ -60,6 +60,9 @@ NEWS_MODEL = "gpt-5.5"
 # IDs dos administradores (para comandos administrativos)
 ADMIN_IDS = [6368750324, 163177765]  # Adicione os IDs dos administradores aqui
 
+# Dono do bot — acesso gratuito e recebe pedidos de liberação
+BOT_OWNER_ID = 163177765
+
 # Limites
 MAX_DAILY_RESPONSES = 30
 LIMITED_GROUP_ID = -1001937153848
