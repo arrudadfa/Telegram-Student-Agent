@@ -34,6 +34,14 @@ usuarios_aguardando_cronograma = {}
 ultimo_pedido_liberacao = {}
 LIBERACAO_COOLDOWN_HORAS = 24
 
+# Textos dos botões do menu
+BTN_PAGAMENTOS = "💳 Pagamentos"
+BTN_PIX_BOT = "💬 Acesso ao Bot — R$10"
+BTN_PIX_GPT = "✍️ GPT Corretor — R$20"
+BTN_VOLTAR_MENU = "◀️ Voltar ao Menu"
+BTN_FALAR_DEV = "👨‍💻 Falar com Dev"
+DEVELOPER_USERNAME = "arrudadfa"
+
 
 async def reply_with_gpt(message: types.Message, user_id: int, prompt: str) -> None:
     """Envia resposta do GPT-4o ao usuário."""
@@ -62,13 +70,34 @@ def criar_menu_botoes() -> ReplyKeyboardMarkup:
                 KeyboardButton(text="🔍 Buscar Arquivos")
             ],
             [
-                KeyboardButton(text="📅 Criar Cronograma")
-            ]
+                KeyboardButton(text="📅 Criar Cronograma"),
+                KeyboardButton(text=BTN_PAGAMENTOS),
+            ],
+            [
+                KeyboardButton(text=BTN_FALAR_DEV),
+            ],
         ],
         resize_keyboard=True,
         one_time_keyboard=False
     )
     return keyboard
+
+
+def criar_menu_pagamentos() -> ReplyKeyboardMarkup:
+    """Submenu de opções de pagamento PIX"""
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=BTN_PIX_BOT)],
+            [KeyboardButton(text=BTN_PIX_GPT)],
+            [KeyboardButton(text=BTN_VOLTAR_MENU)],
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=False,
+    )
+
+
+def _is_button(texto: str, label: str) -> bool:
+    return texto.strip().lower() == label.lower()
 
 @router.message()
 async def handle_message(message: types.Message):
@@ -141,7 +170,10 @@ async def handle_message(message: types.Message):
         if texto.startswith('/start') or texto == '/start':
             await handle_start_command(message)
             return
-        
+
+        if await _handle_payment_button(message, texto):
+            return
+
         if texto.startswith('/gpt') or texto == '/gpt':
             await handle_gpt_command(message)
             return
@@ -262,6 +294,13 @@ async def handle_unpaid_user(message: types.Message, texto: str) -> bool:
     """
     user_id = message.from_user.id
 
+    if texto.startswith('/start') or texto == '/start':
+        await handle_start_command(message)
+        return True
+
+    if await _handle_payment_button(message, texto):
+        return True
+
     if texto.startswith('/liberacao') or texto.startswith('/liberar_acesso'):
         await handle_access_request(message)
         return True
@@ -298,8 +337,64 @@ async def _send_pitch_and_pix(message: types.Message):
     """Envia pitch e, em seguida, cobrança PIX com QR Code."""
     user_id = message.from_user.id
     unpaid_outreach_service.record_outreach(user_id)
-    await message.reply(get_pitch_message())
+    await message.reply(get_pitch_message(), reply_markup=criar_menu_botoes())
     await handle_bot_access_payment(message, record_outreach=False)
+
+
+async def handle_pagamentos_menu(message: types.Message):
+    """Exibe submenu de pagamentos PIX."""
+    await message.reply(
+        "💳 **Pagamentos via PIX**\n\n"
+        "Escolha o que deseja pagar:\n\n"
+        f"• **{BTN_PIX_BOT}** — libera conversa individual com o bot\n"
+        f"• **{BTN_PIX_GPT}** — acesso vitalício ao GPT corretor de redações\n\n"
+        "📷 O QR Code PIX será enviado na conversa privada.",
+        parse_mode='Markdown',
+        reply_markup=criar_menu_pagamentos(),
+    )
+
+
+async def handle_developer_contact(message: types.Message):
+    """Encaminha o usuário ao desenvolvedor."""
+    await message.reply(
+        "👨‍💻 **Falar com o desenvolvedor**\n\n"
+        "Dúvidas, sugestões ou problemas? Entre em contato:\n"
+        f"📱 @{DEVELOPER_USERNAME}\n"
+        f"🔗 https://t.me/{DEVELOPER_USERNAME}\n\n"
+        "💡 Você também pode pedir liberação gratuita digitando /liberacao.",
+        parse_mode='Markdown',
+        reply_markup=criar_menu_botoes(),
+    )
+
+
+async def _handle_payment_button(message: types.Message, texto: str) -> bool:
+    """Trata botões de pagamento e contato. Retorna True se tratou a mensagem."""
+    if _is_button(texto, BTN_PAGAMENTOS) or texto.startswith('/pagamentos'):
+        await handle_pagamentos_menu(message)
+        return True
+
+    if _is_button(texto, BTN_VOLTAR_MENU):
+        await handle_start_command(message)
+        return True
+
+    if _is_button(texto, BTN_FALAR_DEV):
+        await handle_developer_contact(message)
+        return True
+
+    if _is_button(texto, BTN_PIX_BOT):
+        if message.chat.type in ['group', 'supergroup']:
+            await message.reply(
+                "💬 Para receber o PIX de R$ 10,00, me envie uma mensagem privada."
+            )
+            return True
+        await handle_bot_access_payment(message)
+        return True
+
+    if _is_button(texto, BTN_PIX_GPT):
+        await handle_gpt_payment(message)
+        return True
+
+    return False
 
 
 async def handle_bot_access_payment(message: types.Message, record_outreach: bool = True):
@@ -337,7 +432,7 @@ async def handle_bot_access_payment(message: types.Message, record_outreach: boo
 
             qr_image_data = base64.b64decode(pix_data['qr_code_base64'])
             qr_file = BufferedInputFile(qr_image_data, filename="qrcode.png")
-            await message.answer_photo(qr_file, caption="📷 QR Code para pagamento PIX")
+            await message.answer_photo(qr_file, caption="📷 QR Code para pagamento PIX — Acesso ao Bot")
         except Exception as e:
             logger.error(f"Erro ao enviar QR Code: {e}")
 
@@ -482,7 +577,9 @@ async def handle_start_command(message: types.Message):
         "/redação - Corrigir redação\n"
         "/arquivo - Buscar arquivos\n"
         "/cronograma - Criar cronograma\n"
-        "/GPT - Conhecer serviço premium"
+        "/GPT - Conhecer serviço premium\n"
+        f"{BTN_PAGAMENTOS} - Opções de pagamento PIX\n"
+        f"{BTN_FALAR_DEV} - Contato com @{DEVELOPER_USERNAME}"
     )
     
     keyboard = criar_menu_botoes()
@@ -618,37 +715,30 @@ async def handle_cronograma_response(message: types.Message):
         logger.error(f"Erro ao processar resposta de cronograma: {e}", exc_info=True)
         await message.reply("❌ Ocorreu um erro ao processar sua resposta. Tente novamente.")
 
-async def handle_gpt_command(message: types.Message):
-    """
-    Handler para o comando /GPT
-    """
+async def handle_gpt_payment(message: types.Message):
+    """Gera PIX e QR Code para acesso ao GPT corretor de redações."""
     user_id = message.from_user.id
-    
-    # Verifica se o usuário já tem acesso pago
+
     if payment_service.is_paid_user(user_id):
-        # Verifica se é uma conversa privada (não grupo)
         if message.chat.type in ['group', 'supergroup']:
-            # Em grupos, apenas informa que tem acesso, sem enviar o link
             await message.reply(
                 "✅ Você já tem acesso ao GPT Premium!\n\n"
                 "💬 Por favor, me envie uma mensagem privada para receber seu link vitalício."
             )
             return
-        
-        # Em conversas privadas, envia o link
+
         from services.products_config import get_product
         product = get_product('gpt_premium')
         link = product.link if product else "Link não disponível"
         await message.reply(
             "✅ Você já tem acesso ao GPT Premium!\n\n"
             f"🔗 Seu link vitalício:\n{link}\n\n"
-            "💡 Salve este link! Ele é vitalício e você pode usar quantas vezes quiser."
+            "💡 Salve este link! Ele é vitalício e você pode usar quantas vezes quiser.",
+            reply_markup=criar_menu_botoes(),
         )
         return
-    
-    # Verifica se é uma conversa privada (não grupo)
+
     if message.chat.type in ['group', 'supergroup']:
-        # Em grupos, apenas informa sobre o serviço e pede mensagem privada
         info_message = get_gpt_info_message()
         await message.reply(info_message, parse_mode='Markdown')
         await message.reply(
@@ -656,20 +746,15 @@ async def handle_gpt_command(message: types.Message):
             "💬 Por favor, me envie uma mensagem privada para receber o código PIX e realizar o pagamento."
         )
         return
-    
-    # Em conversas privadas, continua com o fluxo de pagamento
-    # Envia informações sobre o serviço
+
     info_message = get_gpt_info_message()
     await message.reply(info_message, parse_mode='Markdown')
-    
-    # Aguarda um pouco antes de enviar a mensagem de pagamento
     await asyncio.sleep(1)
-    
-    # Gera código PIX dinâmico via Mercado Pago para o usuário
+
     from services.pix_generator import pix_generator
-    product_id = 'gpt_premium'  # Produto padrão
+    product_id = 'gpt_premium'
     pix_data = await pix_generator.generate_pix_for_user(user_id, product_id=product_id)
-    
+
     if not pix_data:
         await message.reply(
             "❌ Erro ao gerar código PIX. "
@@ -677,30 +762,36 @@ async def handle_gpt_command(message: types.Message):
             "Tente novamente em alguns instantes."
         )
         return
-    
-    # Envia informações de pagamento com código PIX gerado
+
     payment_msg = await get_payment_message(user_id, pix_data, product_id=product_id)
     await message.reply(payment_msg, parse_mode='Markdown')
-    
-    # Se tiver QR Code, envia como imagem
+
     if pix_data.get('qr_code_base64'):
         try:
             import base64
-            from io import BytesIO  # pyright: ignore[reportUnusedImport]
             from aiogram.types import BufferedInputFile
-            
+
             qr_image_data = base64.b64decode(pix_data['qr_code_base64'])
             qr_file = BufferedInputFile(qr_image_data, filename="qrcode.png")
-            await message.answer_photo(qr_file, caption="📷 QR Code para pagamento PIX")
+            await message.answer_photo(qr_file, caption="📷 QR Code para pagamento PIX — GPT Corretor")
         except Exception as e:
             logger.error(f"Erro ao enviar QR Code: {e}")
-    
-    # Registra pagamento pendente com payment_id do Mercado Pago
+
     payment_id = pix_data.get('payment_id')
-    payment_service.register_pending_payment(user_id, payment_reference=payment_id, pix_code=pix_data.get('pix_code'), product_id=product_id)
-    
-    # Inicia verificação de pagamento em background
+    payment_service.register_pending_payment(
+        user_id,
+        payment_reference=payment_id,
+        pix_code=pix_data.get('pix_code'),
+        product_id=product_id,
+    )
     asyncio.create_task(check_payment_periodically(user_id, message))
+
+
+async def handle_gpt_command(message: types.Message):
+    """
+    Handler para o comando /GPT
+    """
+    await handle_gpt_payment(message)
 
 async def check_payment_periodically(user_id: int, message: types.Message, max_checks: int = 60, interval: int = 30):
     """
