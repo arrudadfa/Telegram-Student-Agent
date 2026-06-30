@@ -29,7 +29,7 @@ def get_paywall_message() -> str:
     return (
         "🔒 **Acesso ao bot**\n\n"
         f"Para conversar comigo, é necessário pagar **R$ {price:.2f}** (pagamento único via PIX).\n\n"
-        "💳 Digite /acesso para gerar o PIX e liberar o uso.\n"
+        "💳 Use o botão **Pagamentos** ou digite /acesso para gerar o PIX e liberar o uso.\n"
         "📩 Ou digite /liberacao para pedir liberação gratuita ao @arrudadfa.\n\n"
         "🤖 Com o acesso você pode:\n"
         "• Corrigir redações\n"
