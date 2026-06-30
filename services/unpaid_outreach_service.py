@@ -1,5 +1,5 @@
 """
-Controle do funil para usuários sem acesso: pitch → ghosting 24h → cobrança PIX.
+Controle do funil para usuários sem acesso: pitch + PIX imediato → ghosting 1h → novo ciclo.
 """
 
 import json
@@ -9,10 +9,10 @@ from typing import Literal, Optional
 
 from config import logger, DATA_DIR
 
-OutreachAction = Literal['pitch', 'ghost', 'pix']
+OutreachAction = Literal['pitch_pix', 'ghost']
 
 OUTREACH_FILE = os.path.join(DATA_DIR, "unpaid_outreach.json")
-GHOSTING_HOURS = 24
+GHOSTING_HOURS = 1
 
 
 class UnpaidOutreachService:
@@ -49,32 +49,39 @@ class UnpaidOutreachService:
             return None
         return datetime.fromisoformat(value)
 
+    def _last_outreach_at(self, state: dict) -> Optional[datetime]:
+        pix_at = self._parse_ts(state.get("pix_sent_at"))
+        pitch_at = self._parse_ts(state.get("pitch_sent_at"))
+        if pix_at and pitch_at:
+            return max(pix_at, pitch_at)
+        return pix_at or pitch_at
+
     def decide_action(self, user_id: int, now: Optional[datetime] = None) -> OutreachAction:
         now = now or datetime.now()
         state = self._states.get(user_id, {})
-        pitch_at = self._parse_ts(state.get("pitch_sent_at"))
-        pix_at = self._parse_ts(state.get("pix_sent_at"))
+        last_at = self._last_outreach_at(state)
 
-        if pitch_at is None:
-            return "pitch"
+        if last_at is None:
+            return "pitch_pix"
 
-        if now - pitch_at < timedelta(hours=GHOSTING_HOURS):
+        if now - last_at < timedelta(hours=GHOSTING_HOURS):
             return "ghost"
 
-        if pix_at is None or pix_at < pitch_at:
-            return "pix"
+        return "pitch_pix"
 
-        if now - pix_at >= timedelta(hours=GHOSTING_HOURS):
-            return "pitch"
-
-        return "ghost"
-
-    def record_pitch(self, user_id: int, now: Optional[datetime] = None):
+    def record_outreach(self, user_id: int, now: Optional[datetime] = None):
+        """Registra envio simultâneo de pitch e PIX."""
         now = now or datetime.now()
         self._states[user_id] = {
             "pitch_sent_at": now.isoformat(),
-            "pix_sent_at": None,
+            "pix_sent_at": now.isoformat(),
         }
+        self._save()
+
+    def record_pitch(self, user_id: int, now: Optional[datetime] = None):
+        now = now or datetime.now()
+        state = self._states.setdefault(user_id, {})
+        state["pitch_sent_at"] = now.isoformat()
         self._save()
 
     def record_pix(self, user_id: int, now: Optional[datetime] = None):

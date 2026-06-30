@@ -51,8 +51,9 @@ def test_should_send_dedup_per_day():
 
 # --- send_daily_broadcast ---
 
-def _patch_bot_and_digest(monkeypatch, digest_value):
+def _patch_bot_and_digest(monkeypatch, digest_value, paid_private_ids=None):
     sent = []
+    paid_private_ids = paid_private_ids or set()
 
     async def fake_send(chat_id, text, **kw):
         sent.append((chat_id, text, kw.get("parse_mode")))
@@ -62,6 +63,11 @@ def _patch_bot_and_digest(monkeypatch, digest_value):
 
     monkeypatch.setattr(ps.bot, "send_message", fake_send)
     monkeypatch.setattr(ps, "generate_news_digest", fake_digest)
+    monkeypatch.setattr(
+        ps.payment_service,
+        "has_bot_access",
+        lambda uid: uid in paid_private_ids,
+    )
     return sent
 
 
@@ -70,10 +76,23 @@ def test_broadcast_friday_sends_news_then_ad(monkeypatch):
     svc = ps.DailyBroadcastService()
     friday = datetime(2026, 6, 26, 9, 0, tzinfo=ps.BRAZIL_TZ)
     asyncio.run(svc.send_daily_broadcast(now=friday))
-    assert len(sent) == 2
-    assert sent[0][1] == "NEWS"
-    assert "promoção" in sent[1][1].lower()
-    assert all(cid == ps.VESTIBULARES_GROUP_ID for cid, _, _ in sent)
+    news = [s for s in sent if s[1] == "NEWS"]
+    ads = [s for s in sent if "promoção" in s[1].lower()]
+    assert len(news) == 1
+    assert news[0][0] == ps.VESTIBULARES_GROUP_ID
+    assert len(ads) == len(ps.ALLOWED_GROUP_IDS)
+    assert all("promoção" in s[1].lower() for s in ads)
+
+
+def test_broadcast_friday_skips_paid_private(monkeypatch):
+    paid_user = next(cid for cid in ps.ALLOWED_GROUP_IDS if cid > 0)
+    sent = _patch_bot_and_digest(monkeypatch, "NEWS", paid_private_ids={paid_user})
+    svc = ps.DailyBroadcastService()
+    friday = datetime(2026, 6, 26, 9, 0, tzinfo=ps.BRAZIL_TZ)
+    asyncio.run(svc.send_daily_broadcast(now=friday))
+    ads = [s for s in sent if "promoção" in s[1].lower()]
+    assert all(cid != paid_user for cid, _, _ in ads)
+    assert len(ads) == len(ps.ALLOWED_GROUP_IDS) - 1
 
 
 def test_broadcast_non_friday_only_news(monkeypatch):
@@ -90,8 +109,8 @@ def test_broadcast_skips_news_when_digest_none(monkeypatch):
     svc = ps.DailyBroadcastService()
     friday = datetime(2026, 6, 26, 9, 0, tzinfo=ps.BRAZIL_TZ)
     asyncio.run(svc.send_daily_broadcast(now=friday))
-    assert len(sent) == 1
-    assert "promoção" in sent[0][1].lower()
+    assert len(sent) == len(ps.ALLOWED_GROUP_IDS)
+    assert all("promoção" in s[1].lower() for s in sent)
 
 
 def test_broadcast_dedupes_same_day(monkeypatch):
@@ -115,5 +134,5 @@ def test_send_to_group_falls_back_to_plain(monkeypatch):
 
     monkeypatch.setattr(ps.bot, "send_message", fake_send)
     svc = ps.DailyBroadcastService()
-    asyncio.run(svc._send_to_group("*texto quebrado"))
+    asyncio.run(svc._send_to_chat(ps.VESTIBULARES_GROUP_ID, "*texto quebrado"))
     assert calls == ["Markdown", None]

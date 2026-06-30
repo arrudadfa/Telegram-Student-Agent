@@ -257,7 +257,7 @@ async def handle_message(message: types.Message):
 async def handle_unpaid_user(message: types.Message, texto: str) -> bool:
     """
     Trata usuários sem acesso ao bot.
-    Ciclo: pitch (1x) → ghosting 24h → cobrança PIX → ghosting até pagar ou novo ciclo.
+    Ciclo: pitch + PIX imediato → ghosting 1h → novo pitch + PIX.
     Retorna True se a mensagem foi tratada (inclui ghosting).
     """
     user_id = message.from_user.id
@@ -266,28 +266,15 @@ async def handle_unpaid_user(message: types.Message, texto: str) -> bool:
         await handle_access_request(message)
         return True
 
-    if texto.startswith('/start') or texto == '/start':
-        unpaid_outreach_service.record_pitch(user_id)
-        await message.reply(get_pitch_message())
-        logger.info(f"Pitch enviado para usuário não pagante {user_id} (/start)")
-        return True
-
+    # Comandos explícitos de pagamento ignoram ghosting
     if texto.startswith('/acesso') or texto.startswith('/pagar'):
         if message.chat.type in ['group', 'supergroup']:
             await message.reply(
                 "💬 Para receber o PIX de R$ 10,00, me envie uma mensagem privada."
             )
             return True
-        unpaid_outreach_service.record_pix(user_id)
-        await handle_bot_access_payment(message, record_outreach=False)
-        logger.info(f"Cobrança PIX enviada para usuário não pagante {user_id} (/acesso)")
-        return True
-
-    if texto.startswith('/gpt'):
-        await message.reply(
-            "🔒 Você precisa de acesso ao bot antes de usar o GPT Premium.\n\n"
-            + get_pitch_message()
-        )
+        await _send_pitch_and_pix(message)
+        logger.info(f"Pitch + PIX enviados para usuário não pagante {user_id} (/acesso)")
         return True
 
     action = unpaid_outreach_service.decide_action(user_id)
@@ -296,23 +283,23 @@ async def handle_unpaid_user(message: types.Message, texto: str) -> bool:
         logger.info(f"Ghosting usuário não pagante {user_id}")
         return True
 
-    if action == 'pitch':
-        unpaid_outreach_service.record_pitch(user_id)
-        await message.reply(get_pitch_message())
-        logger.info(f"Pitch enviado para usuário não pagante {user_id}")
-        return True
-
-    # action == 'pix'
     if message.chat.type in ['group', 'supergroup']:
         await message.reply(
             "💬 Para receber o PIX de R$ 10,00, me envie uma mensagem privada."
         )
         return True
 
-    unpaid_outreach_service.record_pix(user_id)
-    await handle_bot_access_payment(message, record_outreach=False)
-    logger.info(f"Cobrança PIX enviada para usuário não pagante {user_id}")
+    await _send_pitch_and_pix(message)
+    logger.info(f"Pitch + PIX enviados para usuário não pagante {user_id}")
     return True
+
+
+async def _send_pitch_and_pix(message: types.Message):
+    """Envia pitch e, em seguida, cobrança PIX com QR Code."""
+    user_id = message.from_user.id
+    unpaid_outreach_service.record_outreach(user_id)
+    await message.reply(get_pitch_message())
+    await handle_bot_access_payment(message, record_outreach=False)
 
 
 async def handle_bot_access_payment(message: types.Message, record_outreach: bool = True):
